@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>StampedeSafe — Crowd Risk Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<canvas id="gridCanvas"></canvas>
+<div class="noise-overlay"></div>
+
+<!-- ═══ HEADER ═══ -->
+<header class="header">
+  <div class="logo">
+    <svg class="logo-svg" viewBox="0 0 40 40" fill="none">
+      <polygon points="20,2 38,12 38,28 20,38 2,28 2,12" stroke="#00f5d4" stroke-width="1.5" fill="none"/>
+      <polygon points="20,8 32,15 32,25 20,32 8,25 8,15" stroke="#00f5d4" stroke-width="0.8" fill="none" opacity="0.4"/>
+      <circle cx="20" cy="20" r="4" fill="#00f5d4"/>
+    </svg>
+    <div class="logo-text">
+      <span class="logo-name">STAMPEDE<em>SAFE</em></span>
+      <span class="logo-sub">CROWD RISK INTELLIGENCE v2.0</span>
+    </div>
+  </div>
+
+  <nav class="header-nav">
+    <button class="nav-tab active" onclick="switchMode('single',this)">◈ SINGLE CAM</button>
+    <button class="nav-tab" onclick="switchMode('multi',this)">◈◈ MULTI CAM</button>
+  </nav>
+
+  <div class="header-right">
+    <div class="status-pill" id="connPill">
+      <span class="pill-dot"></span>
+      <span class="pill-text">OFFLINE</span>
+    </div>
+    <div class="clock-block">
+      <div class="clock-time" id="clock">00:00:00</div>
+      <div class="clock-date" id="clockDate">--</div>
+    </div>
+  </div>
+</header>
+
+<!-- ═══ MAIN ═══ -->
+<main class="main">
+
+  <!-- SERVER CONFIG -->
+  <div class="config-bar">
+    <span class="config-label"><span class="config-icon">⬡</span> BACKEND</span>
+    <div class="config-input-wrap">
+      <span class="config-prefix">HTTP://</span>
+      <input type="text" id="serverUrl" class="config-input" value="localhost:8000" placeholder="3.92.145.210:8000"/>
+    </div>
+    <button class="config-test-btn" onclick="testConnection()"><span id="testBtnTxt">PING</span></button>
+    <div class="config-response" id="configResp">—</div>
+  </div>
+
+  <!-- ═══ SINGLE CAM ═══ -->
+  <section class="mode-section" id="mode-single">
+    <div class="section-header">
+      <div class="section-title-block">
+        <span class="section-tag">01</span>
+        <h2 class="section-title">SINGLE CAMERA ANALYSIS</h2>
+      </div>
+      <div class="section-meta">Upload one video feed for real-time crowd risk detection</div>
+    </div>
+
+    <div class="upload-panel">
+      <div class="drop-zone" id="singleDrop" onclick="document.getElementById('singleFile').click()">
+        <input type="file" id="singleFile" accept="video/*" hidden onchange="handleSingle(this)"/>
+        <div class="drop-inner">
+          <div class="drop-icon-wrap">
+            <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
+              <rect x="8" y="8" width="48" height="48" rx="4" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <circle cx="32" cy="28" r="8" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M18 48 Q32 36 46 48" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M32 18 L32 10 M28 14 L32 10 L36 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <div class="drop-text">
+            <p class="drop-main">DROP VIDEO FEED HERE</p>
+            <p class="drop-sub">MP4 · AVI · MOV — Single camera stream</p>
+          </div>
+        </div>
+        <div id="singlePreview"></div>
+      </div>
+      <div class="panel-actions">
+        <button class="analyze-btn" id="singleBtn" disabled onclick="analyzeSingle()">
+          <span class="btn-inner"><span class="btn-icon">▶</span><span class="btn-label">RUN ANALYSIS</span></span>
+          <span class="btn-loader"></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="error-banner" id="singleError"></div>
+    <div id="singleResults"></div>
+  </section>
+
+  <!-- ═══ MULTI CAM ═══ -->
+  <section class="mode-section hidden" id="mode-multi">
+    <div class="section-header">
+      <div class="section-title-block">
+        <span class="section-tag">02</span>
+        <h2 class="section-title">MULTI-CAMERA SYSTEM</h2>
+      </div>
+      <div class="section-meta">Upload multiple feeds — each file = one camera zone</div>
+    </div>
+
+    <div class="upload-panel">
+      <div class="drop-zone" id="multiDrop" onclick="document.getElementById('multiFiles').click()">
+        <input type="file" id="multiFiles" accept="video/*" multiple hidden onchange="handleMulti(this)"/>
+        <div class="drop-inner">
+          <div class="drop-icon-wrap">
+            <svg class="drop-icon" viewBox="0 0 64 64" fill="none">
+              <rect x="4" y="12" width="36" height="40" rx="3" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+              <rect x="14" y="6" width="36" height="40" rx="3" stroke="currentColor" stroke-width="1.2" opacity="0.5"/>
+              <circle cx="22" cy="28" r="6" stroke="currentColor" stroke-width="1.5"/>
+            </svg>
+          </div>
+          <div class="drop-text">
+            <p class="drop-main">DROP MULTIPLE FEEDS</p>
+            <p class="drop-sub">Each file = one camera zone · Max 8 cameras</p>
+          </div>
+        </div>
+        <div class="file-chips" id="multiChips"></div>
+      </div>
+      <div class="panel-actions">
+        <button class="analyze-btn" id="multiBtn" disabled onclick="analyzeSystem()">
+          <span class="btn-inner"><span class="btn-icon">▶▶</span><span class="btn-label">ANALYZE SYSTEM</span></span>
+          <span class="btn-loader"></span>
+        </button>
+        <div class="cam-count-badge" id="camCount" style="display:none">
+          <span id="camNum">0</span> CAMERAS QUEUED
+        </div>
+      </div>
+    </div>
+
+    <div class="error-banner" id="multiError"></div>
+    <div id="multiResults"></div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>StampedeSafe Intelligence · YOLOv8s + Optical Flow · FastAPI Backend</span>
+  <span id="footerStatus" style="color:var(--cyan)">SYSTEM READY</span>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
