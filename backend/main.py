@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from datetime import datetime
 
-model = YOLO("models/yolov8s.pt")
+model = YOLO("models/yolov8m.pt")
 
 # ─────────────────────────────────────────────────────────────
 #  BOTTLENECK / EXIT ZONE DETECTION
@@ -139,6 +139,7 @@ def analyze_video(video_path):
     bottleneck_scores    = []
     all_boxes_history    = []
     risk_timeline        = []  # for chart on frontend
+    all_confidences      = []  # ADDED: Track YOLO confidence for accuracy gauge
 
     prev_gray   = None
     frame_count = 0
@@ -155,7 +156,7 @@ def analyze_video(video_path):
         curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
         # ── YOLO DETECTION ──
-        results = model(frame, conf=0.3, iou=0.5, verbose=False)
+        results = model(frame, conf=0.25, iou=0.7, verbose=False)
 
         frame_boxes = []
         count = 0
@@ -165,6 +166,8 @@ def analyze_video(video_path):
                     count += 1
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
                     frame_boxes.append((x1, y1, x2, y2))
+                    # ADDED: Store the confidence score
+                    all_confidences.append(float(box.conf[0]))
 
         people_counts.append(count)
         all_boxes_history.append(frame_boxes)
@@ -225,6 +228,9 @@ def analyze_video(video_path):
     avg_motion       = float(np.mean(motion_scores))
     avg_chaos        = float(np.mean(chaos_factors))
     avg_bottleneck   = float(np.mean(bottleneck_scores))
+    
+    # ADDED: Calculate the average confidence (Accuracy)
+    final_accuracy = (float(np.mean(all_confidences)) * 100) if all_confidences else 0.0
 
     # Use 75th percentile to avoid spike noise
     p75_density    = float(np.percentile(density_scores, 75))
@@ -274,7 +280,7 @@ def analyze_video(video_path):
 
     alert = {
         "triggered":           risk_level == "High",
-        "severity":            risk_level,
+        "severity":             risk_level,
         "recommended_action":  action,
         "bottleneck_detected": bottleneck_detected,
         "chaos_factor":        round(avg_chaos, 3)
@@ -298,6 +304,7 @@ def analyze_video(video_path):
         "density_score":       round(avg_density * 100, 1),
         "motion_score":        round(avg_motion * 100, 1),
         "bottleneck_score":    round(avg_bottleneck * 100, 1),
+        "model_accuracy":      round(final_accuracy, 1),  # ADDED: Send to Frontend
 
         # For backwards compat with old frontend
         "average_risk_score":  risk_score,
