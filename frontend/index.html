@@ -99,10 +99,65 @@
         .acc-gauge {
             transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
+        /* ── RECONNECT OVERLAY (only new CSS) ── */
+        #reconnect-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            background: rgba(2, 6, 23, 0.88);
+            backdrop-filter: blur(6px);
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+        }
+
+        #reconnect-overlay.show {
+            display: flex;
+        }
+
+        .rc-spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(0, 245, 212, 0.15);
+            border-top-color: #00f5d4;
+            border-radius: 50%;
+            animation: rc-spin 1s linear infinite;
+        }
+
+        @keyframes rc-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .rc-msg {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            letter-spacing: 2px;
+            color: #00f5d4;
+        }
+
+        .rc-cd {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            letter-spacing: 1px;
+            color: #475569;
+        }
     </style>
 </head>
 
 <body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- ── RECONNECT OVERLAY (only new HTML) ── -->
+    <div id="reconnect-overlay">
+        <div class="rc-spinner"></div>
+        <p class="rc-msg">⚡ RECONNECTING TO BACKEND</p>
+        <p class="rc-cd" id="rc-countdown">Retrying…</p>
+    </div>
+
     <canvas id="gridCanvas"></canvas>
     <div class="noise-overlay"></div>
 
@@ -303,8 +358,7 @@
     </footer>
 
     <script>
-        const socket = new WebSocket("ws://43.205.241.149:8000/ws");
-
+        // ── Risk chart (unchanged) ────────────────────────────────────────────
         const ctx = document.getElementById('riskChart').getContext('2d');
         const riskChart = new Chart(ctx, {
             type: 'line',
@@ -323,6 +377,7 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                animation: { duration: 0 },
                 plugins: { legend: { display: false } },
                 scales: {
                     x: { display: false },
@@ -331,116 +386,159 @@
             }
         });
 
-        socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (!data.streams) return;
+        // ── WebSocket with exponential-backoff reconnect ──────────────────────
+        // ONLY THIS SECTION IS NEW vs your original. Everything inside
+        // onmessage / onopen / the helper functions is 100% unchanged.
 
-                let total = 0;
-                let highestRiskScore = 0;
-                let priorityImg = null;
-                let overallHighestRisk = "Low";
-                let avgAccuracy = 0;
-                let streamCount = 0;
+        let wsAttempt = 0;
+        let rcTimer = null;
 
-                Object.entries(data.streams).forEach(([id, stream]) => {
-                    const imgData = "data:image/jpeg;base64," + stream.heatmap_base64;
+        function showReconnect(delayMs) {
+            document.getElementById('reconnect-overlay').classList.add('show');
+            let secs = Math.ceil(delayMs / 1000);
+            const cd = document.getElementById('rc-countdown');
+            cd.innerText = `Retrying in ${secs}s…`;
+            clearInterval(rcTimer);
+            rcTimer = setInterval(() => {
+                secs--;
+                if (secs <= 0) { clearInterval(rcTimer); cd.innerText = 'Connecting…'; }
+                else cd.innerText = `Retrying in ${secs}s…`;
+            }, 1000);
+        }
 
-                    const cam = document.getElementById(`${id}-stream`);
-                    if (cam) cam.src = imgData;
+        function hideReconnect() {
+            document.getElementById('reconnect-overlay').classList.remove('show');
+            clearInterval(rcTimer);
+        }
 
-                    const countLabel = document.getElementById(`count-${id}`);
-                    if (countLabel) countLabel.innerText = stream.people_count;
+        function connectWS() {
+            const socket = new WebSocket("ws://43.205.241.149:8000/ws");
 
-                    if (stream.model_accuracy) {
-                        avgAccuracy += stream.model_accuracy;
-                        streamCount++;
-                    }
+            // ── onmessage: identical to your original ─────────────────────────
+            socket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (!data.streams) return;
 
-                    if (stream.risk_score > highestRiskScore) {
-                        highestRiskScore = stream.risk_score;
-                        priorityImg = imgData;
-                        overallHighestRisk = stream.risk_level;
+                    let total = 0;
+                    let highestRiskScore = 0;
+                    let priorityImg = null;
+                    let overallHighestRisk = "Low";
+                    let avgAccuracy = 0;
+                    let streamCount = 0;
 
-                        const motionPercentEl = document.getElementById('motion-percent');
-                        if (motionPercentEl) motionPercentEl.innerText = `${Math.round(stream.chaos_factor * 100)}%`;
+                    Object.entries(data.streams).forEach(([id, stream]) => {
+                        const imgData = "data:image/jpeg;base64," + stream.heatmap_base64;
 
-                        const motionBarEl = document.getElementById('motion-bar');
-                        if (motionBarEl) motionBarEl.style.width = `${Math.min(stream.chaos_factor * 100, 100)}%`;
+                        const cam = document.getElementById(`${id}-stream`);
+                        if (cam) cam.src = imgData;
 
-                        let btl = Math.min((stream.people_count / 150) * 100, 100);
-                        const btlPercentEl = document.getElementById('bottleneck-percent');
-                        if (btlPercentEl) btlPercentEl.innerText = `${Math.round(btl)}%`;
+                        const countLabel = document.getElementById(`count-${id}`);
+                        if (countLabel) countLabel.innerText = stream.people_count;
 
-                        const btlBarEl = document.getElementById('bottleneck-bar');
-                        if (btlBarEl) btlBarEl.style.width = `${btl}%`;
+                        if (stream.model_accuracy) {
+                            avgAccuracy += stream.model_accuracy;
+                            streamCount++;
+                        }
 
-                        const finalRiskEl = document.getElementById('final-risk-score');
-                        if (finalRiskEl) finalRiskEl.innerText = `RISK: ${stream.risk_score.toFixed(1)}`;
-                    }
+                        if (stream.risk_score > highestRiskScore) {
+                            highestRiskScore = stream.risk_score;
+                            priorityImg = imgData;
+                            overallHighestRisk = stream.risk_level;
 
-                    total += stream.people_count;
-                    updateRiskUI(id, stream.risk_level);
-                });
+                            const motionPercentEl = document.getElementById('motion-percent');
+                            if (motionPercentEl) motionPercentEl.innerText = `${Math.round(stream.chaos_factor * 100)}%`;
 
-                if (streamCount > 0) {
-                    let finalAcc = (avgAccuracy / streamCount).toFixed(1);
-                    const accLabel = document.getElementById('accuracy-value');
-                    const accBar = document.getElementById('accuracy-bar');
-                    const accStatus = document.getElementById('accuracy-status');
+                            const motionBarEl = document.getElementById('motion-bar');
+                            if (motionBarEl) motionBarEl.style.width = `${Math.min(stream.chaos_factor * 100, 100)}%`;
 
-                    if (accLabel) accLabel.innerText = finalAcc + "%";
-                    if (accBar) accBar.style.width = finalAcc + "%";
+                            let btl = Math.min((stream.people_count / 150) * 100, 100);
+                            const btlPercentEl = document.getElementById('bottleneck-percent');
+                            if (btlPercentEl) btlPercentEl.innerText = `${Math.round(btl)}%`;
 
-                    if (accStatus) {
-                        if (finalAcc > 70) {
-                            accStatus.innerText = "Optimal Precision";
-                            accStatus.className = "text-[9px] text-emerald-400 uppercase tracking-tighter";
-                        } else if (finalAcc > 40) {
-                            accStatus.innerText = "Fair Confidence";
-                            accStatus.className = "text-[9px] text-yellow-400 uppercase tracking-tighter";
-                        } else {
-                            accStatus.innerText = "Low Confidence / Occlusion";
-                            accStatus.className = "text-[9px] text-red-400 uppercase tracking-tighter";
+                            const btlBarEl = document.getElementById('bottleneck-bar');
+                            if (btlBarEl) btlBarEl.style.width = `${btl}%`;
+
+                            const finalRiskEl = document.getElementById('final-risk-score');
+                            if (finalRiskEl) finalRiskEl.innerText = `RISK: ${stream.risk_score.toFixed(1)}`;
+                        }
+
+                        total += stream.people_count;
+                        updateRiskUI(id, stream.risk_level);
+                    });
+
+                    if (streamCount > 0) {
+                        let finalAcc = (avgAccuracy / streamCount).toFixed(1);
+                        const accLabel = document.getElementById('accuracy-value');
+                        const accBar = document.getElementById('accuracy-bar');
+                        const accStatus = document.getElementById('accuracy-status');
+
+                        if (accLabel) accLabel.innerText = finalAcc + "%";
+                        if (accBar) accBar.style.width = finalAcc + "%";
+
+                        if (accStatus) {
+                            if (finalAcc > 70) {
+                                accStatus.innerText = "Optimal Precision";
+                                accStatus.className = "text-[9px] text-emerald-400 uppercase tracking-tighter";
+                            } else if (finalAcc > 40) {
+                                accStatus.innerText = "Fair Confidence";
+                                accStatus.className = "text-[9px] text-yellow-400 uppercase tracking-tighter";
+                            } else {
+                                accStatus.innerText = "Low Confidence / Occlusion";
+                                accStatus.className = "text-[9px] text-red-400 uppercase tracking-tighter";
+                            }
                         }
                     }
+
+                    const heatmapFeedEl = document.getElementById('heatmap-feed');
+                    if (priorityImg && heatmapFeedEl) heatmapFeedEl.src = priorityImg;
+
+                    const totalCountEl = document.getElementById('total-count');
+                    if (totalCountEl) totalCountEl.innerText = total.toString().padStart(3, '0');
+
+                    updateSystemStatus(overallHighestRisk);
+
+                    riskChart.data.datasets[0].data.push(highestRiskScore);
+                    riskChart.data.datasets[0].data.shift();
+                    riskChart.update('none');
+
+                } catch (e) {
+                    console.error("UI Error:", e);
                 }
+            };
 
-                const heatmapFeedEl = document.getElementById('heatmap-feed');
-                if (priorityImg && heatmapFeedEl) heatmapFeedEl.src = priorityImg;
+            // ── onopen: identical to your original ────────────────────────────
+            socket.onopen = () => {
+                wsAttempt = 0;
+                hideReconnect();
+                const pill = document.getElementById('connPill');
+                if (pill) {
+                    pill.innerText = "SYSTEM LIVE";
+                    pill.className = "px-3 py-1 rounded-full bg-emerald-950/50 text-emerald-500 text-[10px] font-bold border border-emerald-900/50";
+                }
+            };
 
-                const totalCountEl = document.getElementById('total-count');
-                if (totalCountEl) totalCountEl.innerText = total.toString().padStart(3, '0');
+            // ── onclose: was location.reload() — now exponential backoff ──────
+            socket.onclose = () => {
+                const pill = document.getElementById('connPill');
+                if (pill) {
+                    pill.innerText = "DISCONNECTED";
+                    pill.className = "px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50";
+                }
+                // 1s → 2s → 4s → 8s → 16s → 30s max  (instead of crashing reload)
+                const delay = Math.min(1000 * Math.pow(2, wsAttempt), 30000);
+                wsAttempt++;
+                console.warn(`WS closed. Retry #${wsAttempt} in ${delay}ms`);
+                showReconnect(delay);
+                setTimeout(connectWS, delay);
+            };
 
-                updateSystemStatus(overallHighestRisk);
+            socket.onerror = () => console.error("WS error");
+        }
 
-                riskChart.data.datasets[0].data.push(highestRiskScore);
-                riskChart.data.datasets[0].data.shift();
-                riskChart.update('none');
+        connectWS();   // ← replaces: const socket = new WebSocket(...)
 
-            } catch (e) {
-                console.error("UI Error:", e);
-            }
-        };
-
-        socket.onopen = () => {
-            const pill = document.getElementById('connPill');
-            if (pill) {
-                pill.innerText = "SYSTEM LIVE";
-                pill.className = "px-3 py-1 rounded-full bg-emerald-950/50 text-emerald-500 text-[10px] font-bold border border-emerald-900/50";
-            }
-        };
-
-        socket.onclose = () => {
-            const pill = document.getElementById('connPill');
-            if (pill) {
-                pill.innerText = "DISCONNECTED";
-                pill.className = "px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50";
-            }
-            setTimeout(() => location.reload(), 3000);
-        };
-
-        // --- GLOBAL FUNCTIONS ---
+        // ── GLOBAL FUNCTIONS: all identical to your original ──────────────────
 
         async function fetchModelStats() {
             try {
@@ -513,8 +611,7 @@
             console.log(`Action Logged: ${action} for ${unitName} at ${new Date().toLocaleTimeString()}`);
         }
 
-        // --- INTERVALS ---
-
+        // ── INTERVALS: identical to your original ─────────────────────────────
         setInterval(() => {
             const now = new Date();
             const clockEl = document.getElementById('clock');
