@@ -566,56 +566,92 @@ new MutationObserver(() => {
 ════════════════════════════════════════════════════════════════════════════ */
 
 // ── LIVE WEBSOCKET HANDLER ────────────────────────────
+// ── LIVE WEBSOCKET HANDLER ────────────────────────────
 let liveSocket = null;
+let reconnectTimer = null;
+let pingInterval = null;
 
 function initLiveStream() {
   const base = getBase();
-  const wsUrl = base.replace('http', 'ws') + '/ws';
+  const wsUrl = base.replace(/^http/, "ws") + "/ws";
 
-  console.log("🔗 Attempting WebSocket connection to:", wsUrl);
+  console.log("🔗 Connecting to WebSocket:", wsUrl);
+
   liveSocket = new WebSocket(wsUrl);
 
   liveSocket.onopen = () => {
     console.log("🚀 Live Stream Socket Connected");
-    document.getElementById('footerStatus').textContent = 'LIVE STREAM ACTIVE';
+
+    const footer = document.getElementById("footerStatus");
+    if (footer) footer.textContent = "LIVE STREAM ACTIVE";
+
+    // Keep connection alive
+    pingInterval = setInterval(() => {
+      if (liveSocket.readyState === WebSocket.OPEN) {
+        liveSocket.send(JSON.stringify({ type: "ping" }));
+      }
+    }, 20000);
   };
 
   liveSocket.onmessage = (event) => {
-    const data = JSON.parse(event.data);
+    try {
+      const data = JSON.parse(event.data);
 
-    // Data format expected: { "streams": { "CAM_01": {...}, "CAM_03": {...} } }
-    if (data.streams) {
+      if (!data.streams) return;
+
       Object.entries(data.streams).forEach(([camId, streamData]) => {
 
-        // 1. Update Camera Video Frame
+        // Update camera image
         const imgEl = document.getElementById(`${camId}-stream`);
         if (imgEl && streamData.heatmap_base64) {
           imgEl.src = "data:image/jpeg;base64," + streamData.heatmap_base64;
           imgEl.style.opacity = "1";
         }
 
-        // 2. Update Dashboard Numbers (Demo Focal Point)
-        // We use CAM_03 as our primary "Incident Zone" for the demo
+        // Dashboard stats
         if (camId === "CAM_03" || camId === "CAM_01") {
-          const totalDisplay = document.getElementById('total-count');
-          const chaosDisplay = document.getElementById('chaos-val');
-          const riskDisplay = document.getElementById('critical-count');
+          const totalDisplay = document.getElementById("total-count");
+          const chaosDisplay = document.getElementById("chaos-val");
+          const riskDisplay = document.getElementById("critical-count");
 
-          if (totalDisplay) totalDisplay.innerText = streamData.people_count.toString().padStart(3, '0');
-          if (chaosDisplay) chaosDisplay.innerText = (streamData.chaos_factor * 100).toFixed(0) + '%';
-          if (riskDisplay) riskDisplay.innerText = streamData.people_count;
+          if (totalDisplay)
+            totalDisplay.innerText = streamData.people_count
+              .toString()
+              .padStart(3, "0");
+
+          if (chaosDisplay)
+            chaosDisplay.innerText =
+              (streamData.chaos_factor * 100).toFixed(0) + "%";
+
+          if (riskDisplay)
+            riskDisplay.innerText = streamData.people_count;
         }
       });
+
+    } catch (err) {
+      console.error("⚠️ WebSocket parse error:", err);
     }
   };
 
   liveSocket.onclose = () => {
-    console.warn("🔌 Socket Disconnected. Retrying in 3s...");
-    setTimeout(initLiveStream, 3000);
+    console.warn("🔌 WebSocket disconnected");
+
+    if (pingInterval) clearInterval(pingInterval);
+
+    const footer = document.getElementById("footerStatus");
+    if (footer) footer.textContent = "RECONNECTING...";
+
+    if (!reconnectTimer) {
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        initLiveStream();
+      }, 3000);
+    }
   };
 
   liveSocket.onerror = (err) => {
-    console.error("❌ WebSocket Error:", err);
+    console.error("❌ WebSocket error:", err);
+    liveSocket.close();
   };
 }
 
