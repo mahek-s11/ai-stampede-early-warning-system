@@ -167,6 +167,9 @@ async def upload_to_cam(cam_id: str, file: UploadFile = File(...)):
 # 3. ANALYSIS ENDPOINTS
 # ════════════════════════════════════════════════════
 
+@app.get("/")
+def home():
+    return {"message": "StampedeSafe Tactical API Running", "version": "2.0"}
 
 @app.post("/analyze")
 async def analyze(file: UploadFile = File(...)):
