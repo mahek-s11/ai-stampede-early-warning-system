@@ -1,18 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>StampedeSafe — CrowdSense AI Control</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link
-        href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap"
-        rel="stylesheet" />
-        <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://crowdsense-dashboard.s3.amazonaws.com/style.css">
-    <script src="https://crowdsense-dashboard.s3.amazonaws.com/app.js" defer></script>
-    
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;700&display=swap" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
@@ -21,610 +15,410 @@
             --cyan-glow: #00f5d4;
             --red-alert: #ef4444;
         }
-
-        body {
-            background-color: var(--bg-deep);
-            color: #94a3b8;
-            font-family: 'Rajdhani', sans-serif;
-        }
-
-        .glass-panel {
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        .cam-feed {
-            border: 1px solid rgba(0, 245, 212, 0.2);
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-
-        .cam-feed:hover {
-            border-color: var(--cyan-glow);
-            box-shadow: 0 0 15px rgba(0, 245, 212, 0.1);
-        }
-
-        .status-pulse {
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.4;
-            }
-
-            100% {
-                opacity: 1;
-            }
-        }
-
-        .authority-card {
-            background: rgba(30, 41, 59, 0.5);
-            border-left: 3px solid #3b82f6;
-        }
-
+        body { background-color: var(--bg-deep); color: #94a3b8; font-family: 'Rajdhani', sans-serif; }
+        .glass-panel { background: var(--panel-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.05); }
+        .cam-feed { border: 1px solid rgba(0, 245, 212, 0.2); transition: all 0.3s ease; cursor: pointer; }
+        .cam-feed:hover { border-color: var(--cyan-glow); box-shadow: 0 0 15px rgba(0, 245, 212, 0.1); }
+        .status-pulse { animation: pulse 2s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+        .authority-card { background: rgba(30, 41, 59, 0.5); border-left: 3px solid #3b82f6; }
         .heatmap-overlay {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             mix-blend-mode: screen;
             opacity: 0.9;
             pointer-events: none;
             z-index: 10;
         }
-
         .base-video {
             position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0; width: 100%; height: 100%;
             object-fit: cover;
             z-index: 1;
             filter: brightness(0.7);
         }
-
-        .chart-container {
-            position: relative;
-            height: 100px;
-            width: 100%;
-        }
-
-        .acc-gauge {
-            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        /* ── RECONNECT OVERLAY (only new CSS) ── */
-        #reconnect-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            z-index: 9999;
-            background: rgba(2, 6, 23, 0.88);
-            backdrop-filter: blur(6px);
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 14px;
-        }
-
-        #reconnect-overlay.show {
-            display: flex;
-        }
-
-        .rc-spinner {
-            width: 44px;
-            height: 44px;
-            border: 3px solid rgba(0, 245, 212, 0.15);
-            border-top-color: #00f5d4;
-            border-radius: 50%;
-            animation: rc-spin 1s linear infinite;
-        }
-
-        @keyframes rc-spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .rc-msg {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 11px;
-            letter-spacing: 2px;
-            color: #00f5d4;
-        }
-
-        .rc-cd {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 10px;
-            letter-spacing: 1px;
-            color: #475569;
-        }
+        .chart-container { position: relative; height: 100px; width: 100%; }
+        .acc-gauge { transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
     </style>
 </head>
-
 <body class="h-screen flex flex-col overflow-hidden">
 
-    <!-- ── RECONNECT OVERLAY (only new HTML) ── -->
-    <div id="reconnect-overlay">
-        <div class="rc-spinner"></div>
-        <p class="rc-msg">⚡ RECONNECTING TO BACKEND</p>
-        <p class="rc-cd" id="rc-countdown">Retrying…</p>
+<header class="p-4 flex justify-between items-center border-b border-slate-800 glass-panel">
+    <div class="flex items-center gap-4">
+        <div class="logo-text">
+            <h1 class="text-xl font-bold tracking-tighter text-white">CROWDSENSE <span class="text-cyan-400">AI</span></h1>
+            <p class="text-[10px] tracking-[0.4em] text-slate-500 uppercase">Authority Dispatch System</p>
+        </div>
+        <div class="flex gap-6 ml-10 border-l border-slate-700 pl-6">
+            <div class="text-center">
+                <p class="text-[10px] text-slate-500 uppercase">Total Persons</p>
+                <p id="total-count" class="text-xl font-mono text-white">000</p>
+            </div>
+            <div class="text-center">
+                <p class="text-[10px] text-slate-500 uppercase">Units Deployed</p>
+                <p class="text-xl font-mono text-cyan-400">03</p>
+            </div>
+            <div class="text-center">
+                <p class="text-[10px] text-slate-500 uppercase">System Status</p>
+                <p id="system-status" class="text-xl font-bold text-emerald-500">STABLE</p>
+            </div>
+        </div>
+    </div>
+    <div class="flex items-center gap-4">
+        <div id="connPill" class="px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50">BACKEND OFFLINE</div>
+        <div class="text-right">
+            <div id="clock" class="text-lg font-mono text-white leading-none">00:00:00</div>
+            <div id="clockDate" class="text-[10px] text-slate-500 uppercase">03 MAR 2026</div>
+        </div>
+    </div>
+</header>
+
+<main class="flex-grow grid grid-cols-12 gap-3 p-3 overflow-hidden">
+
+    <div class="col-span-7 grid grid-cols-2 grid-rows-2 gap-3">
+        <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_01')">
+            <div class="flex justify-between text-[10px] mb-1">
+                <span class="text-white" id="CAM_01-label">CAM-01 / GATE A</span>
+                <span class="text-emerald-500" id="status-CAM_01">LOW RISK</span>
+            </div>
+            <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
+                <img id="CAM_01-stream" src="" class="w-full h-full object-cover">
+                <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_01">0</div>
+            </div>
+            <div class="mt-2 h-1 bg-slate-800 rounded-full"><div id="bar-CAM_01" class="h-full bg-emerald-500 w-1/4"></div></div>
+        </div>
+
+        <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_02')">
+            <div class="flex justify-between text-[10px] mb-1">
+                <span class="text-white" id="CAM_02-label">CAM-02 / MAIN HALL</span>
+                <span class="text-yellow-500 font-bold" id="status-CAM_02">MED RISK</span>
+            </div>
+            <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
+                <img id="CAM_02-stream" src="" class="w-full h-full object-cover">
+                <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_02">0</div>
+            </div>
+            <div class="mt-2 h-1 bg-slate-800 rounded-full"><div id="bar-CAM_02" class="h-full bg-yellow-500 w-1/2"></div></div>
+        </div>
+
+        <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_03')">
+            <div class="flex justify-between text-[10px] mb-1">
+                <span class="text-white" id="CAM_03-label">CAM-03 / EXIT B</span>
+                <span class="text-red-500 font-bold" id="status-CAM_03">CRITICAL</span>
+            </div>
+            <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
+                <img id="CAM_03-stream" src="" class="base-video">
+                <img id="CAM_03-heatmap" src="" class="heatmap-overlay">
+                <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_03">0</div>
+            </div>
+            <div class="mt-2 h-1 bg-slate-800 rounded-full"><div id="bar-CAM_03" class="h-full bg-red-500 w-[97%]"></div></div>
+        </div>
+
+        <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_04')">
+            <div class="flex justify-between text-[10px] mb-1">
+                <span class="text-white" id="CAM_04-label">CAM-04 / CORRIDOR</span>
+                <span class="text-emerald-500" id="status-CAM_04">LOW RISK</span>
+            </div>
+            <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
+                <img id="CAM_04-stream" src="" class="w-full h-full object-cover">
+                <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_04">0</div>
+            </div>
+            <div class="mt-2 h-1 bg-slate-800 rounded-full"><div id="bar-CAM_04" class="h-full bg-emerald-500 w-[15%]"></div></div>
+        </div>
     </div>
 
-    <canvas id="gridCanvas"></canvas>
-    <div class="noise-overlay"></div>
-
-    <header class="p-4 flex justify-between items-center border-b border-slate-800 glass-panel">
-        <div class="flex items-center gap-4">
-            <div class="logo-text">
-                <h1 class="text-xl font-bold tracking-tighter text-white">CROWDSENSE <span
-                        class="text-cyan-400">AI</span></h1>
-                <p class="text-[10px] tracking-[0.4em] text-slate-500 uppercase">Authority Dispatch System</p>
+    <div class="col-span-3 flex flex-col gap-3">
+        <div class="glass-panel flex-grow rounded p-4 flex flex-col">
+            <h3 class="text-[10px] uppercase tracking-widest text-cyan-400 mb-4">Live Density Heatmap</h3>
+            <div class="flex-grow relative border border-slate-800 rounded bg-slate-950 overflow-hidden">
+                <img id="heatmap-feed" src="" class="w-full h-full object-contain">
             </div>
-            <div class="flex gap-6 ml-10 border-l border-slate-700 pl-6">
-                <div class="text-center">
-                    <p class="text-[10px] text-slate-500 uppercase">Total Persons</p>
-                    <p id="total-count" class="text-xl font-mono text-white">000</p>
+            <div class="mt-4 space-y-3">
+                <div class="p-2 bg-black/40 border border-slate-800 rounded">
+                    <p class="text-[10px] text-slate-500 uppercase flex justify-between">Motion Anomaly <span id="motion-percent" class="text-orange-400">0%</span></p>
+                    <div class="w-full bg-slate-900 h-1 mt-1 rounded-full overflow-hidden">
+                        <div id="motion-bar" class="bg-orange-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
                 </div>
-                <div class="text-center">
-                    <p class="text-[10px] text-slate-500 uppercase">Units Deployed</p>
-                    <p class="text-xl font-mono text-cyan-400">03</p>
+                <div class="p-2 bg-black/40 border border-slate-800 rounded">
+                    <p class="text-[10px] text-slate-500 uppercase flex justify-between">Bottleneck Score <span id="bottleneck-percent" class="text-red-400">0%</span></p>
+                    <div class="w-full bg-slate-900 h-1 mt-1 rounded-full overflow-hidden">
+                        <div id="bottleneck-bar" class="bg-red-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
                 </div>
-                <div class="text-center">
-                    <p class="text-[10px] text-slate-500 uppercase">System Status</p>
-                    <p id="system-status" class="text-xl font-bold text-emerald-500">STABLE</p>
+            </div>
+            <div class="mt-4 p-2 bg-black/40 border border-slate-800 rounded">
+                <h4 class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Risk Timeline</h4>
+                <div class="chart-container">
+                    <canvas id="riskChart"></canvas>
                 </div>
             </div>
         </div>
-        <div class="flex items-center gap-4">
-            <div id="connPill"
-                class="px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50">
-                BACKEND OFFLINE</div>
-            <div class="text-right">
-                <div id="clock" class="text-lg font-mono text-white leading-none">00:00:00</div>
-                <div id="clockDate" class="text-[10px] text-slate-500 uppercase">08 MAR 2026</div>
-            </div>
+    </div>
+
+    <div class="col-span-2 flex flex-col gap-3">
+        <div class="glass-panel p-3 rounded border-l-2 border-cyan-500">
+            <h3 class="text-[10px] uppercase tracking-widest text-cyan-400 mb-2">Risk Formula</h3>
+            <p class="text-[9px] text-slate-400 leading-tight">0.5 × Density + 0.3 × Motion + 0.2 × Bottleneck</p>
+            <p id="final-risk-score" class="text-lg font-mono text-white mt-1">RISK: 0.0</p>
         </div>
-    </header>
 
-    <main class="flex-grow grid grid-cols-12 gap-3 p-3 overflow-hidden">
-
-        <div class="col-span-7 grid grid-cols-2 grid-rows-2 gap-3">
-            <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_01')">
-                <div class="flex justify-between text-[10px] mb-1">
-                    <span class="text-white" id="CAM_01-label">CAM-01 / GATE A</span>
-                    <span class="text-emerald-500" id="status-CAM_01">LOW RISK</span>
-                </div>
-                <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
-                    <img id="CAM_01-stream" src="" class="w-full h-full object-cover">
-                    <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_01">0</div>
-                </div>
-                <div class="mt-2 h-1 bg-slate-800 rounded-full">
-                    <div id="bar-CAM_01" class="h-full bg-emerald-500 w-1/4"></div>
-                </div>
+        <div class="glass-panel p-3 rounded border-l-2 border-purple-500">
+            <h3 class="text-[10px] uppercase tracking-widest text-purple-400 mb-1">AI Confidence Score</h3>
+            <div class="flex justify-between items-end">
+                <p id="accuracy-value" class="text-2xl font-mono text-white">0.0%</p>
+                <p id="accuracy-status" class="text-[9px] text-slate-500 mb-1 uppercase tracking-tighter">Initializing...</p>
             </div>
-
-            <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_02')">
-                <div class="flex justify-between text-[10px] mb-1">
-                    <span class="text-white" id="CAM_02-label">CAM-02 / MAIN HALL</span>
-                    <span class="text-yellow-500 font-bold" id="status-CAM_02">MED RISK</span>
-                </div>
-                <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
-                    <img id="CAM_02-stream" src="" class="w-full h-full object-cover">
-                    <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_02">0</div>
-                </div>
-                <div class="mt-2 h-1 bg-slate-800 rounded-full">
-                    <div id="bar-CAM_02" class="h-full bg-yellow-500 w-1/2"></div>
-                </div>
-            </div>
-
-            <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_03')">
-                <div class="flex justify-between text-[10px] mb-1">
-                    <span class="text-white" id="CAM_03-label">CAM-03 / EXIT B</span>
-                    <span class="text-red-500 font-bold" id="status-CAM_03">CRITICAL</span>
-                </div>
-                <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
-                    <img id="CAM_03-stream" src="" class="base-video">
-                    <img id="CAM_03-heatmap" src="" class="heatmap-overlay">
-                    <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_03">0</div>
-                </div>
-                <div class="mt-2 h-1 bg-slate-800 rounded-full">
-                    <div id="bar-CAM_03" class="h-full bg-red-500 w-[97%]"></div>
-                </div>
-            </div>
-
-            <div class="cam-feed rounded bg-black p-2 flex flex-col" onclick="uploadToLiveCam('CAM_04')">
-                <div class="flex justify-between text-[10px] mb-1">
-                    <span class="text-white" id="CAM_04-label">CAM-04 / CORRIDOR</span>
-                    <span class="text-emerald-500" id="status-CAM_04">LOW RISK</span>
-                </div>
-                <div class="relative flex-grow bg-slate-900 rounded overflow-hidden">
-                    <img id="CAM_04-stream" src="" class="w-full h-full object-cover">
-                    <div class="absolute bottom-2 left-2 text-3xl font-mono text-white z-20" id="count-CAM_04">0</div>
-                </div>
-                <div class="mt-2 h-1 bg-slate-800 rounded-full">
-                    <div id="bar-CAM_04" class="h-full bg-emerald-500 w-[15%]"></div>
-                </div>
+            <div class="w-full bg-slate-900 h-1.5 mt-2 rounded-full overflow-hidden">
+                <div id="accuracy-bar" class="bg-purple-500 h-full w-0 acc-gauge"></div>
             </div>
         </div>
 
-        <div class="col-span-3 flex flex-col gap-3">
-            <div class="glass-panel flex-grow rounded p-4 flex flex-col">
-                <h3 class="text-[10px] uppercase tracking-widest text-cyan-400 mb-4">Live Density Heatmap</h3>
-                <div class="flex-grow relative border border-slate-800 rounded bg-slate-950 overflow-hidden">
-                    <img id="heatmap-feed" src="" class="w-full h-full object-contain">
+        <h3 class="text-[10px] uppercase tracking-widest text-slate-500 pl-1">Authority Units</h3>
+        <div class="flex-grow space-y-3 overflow-y-auto pr-1">
+            <div class="authority-card p-3 rounded">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-white font-bold">Guard Kavya Rao</span>
+                    <span class="text-[8px] bg-slate-800 px-1 rounded">STANDBY</span>
                 </div>
-                <div class="mt-4 space-y-3">
-                    <div class="p-2 bg-black/40 border border-slate-800 rounded">
-                        <p class="text-[10px] text-slate-500 uppercase flex justify-between">Motion Anomaly <span
-                                id="motion-percent" class="text-orange-400">0%</span></p>
-                        <div class="w-full bg-slate-900 h-1 mt-1 rounded-full overflow-hidden">
-                            <div id="motion-bar" class="bg-orange-500 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
-                    <div class="p-2 bg-black/40 border border-slate-800 rounded">
-                        <p class="text-[10px] text-slate-500 uppercase flex justify-between">Bottleneck Score <span
-                                id="bottleneck-percent" class="text-red-400">0%</span></p>
-                        <div class="w-full bg-slate-900 h-1 mt-1 rounded-full overflow-hidden">
-                            <div id="bottleneck-bar" class="bg-red-500 h-full w-0 transition-all duration-300"></div>
-                        </div>
-                    </div>
+                <div class="flex gap-2">
+                    <button onclick="handleAction('Guard Kavya Rao', 'DISPATCH')" class="flex-grow py-1 text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/40 rounded uppercase font-bold">Dispatch</button>
+                    <button onclick="handleAction('Guard Kavya Rao', 'ALERT')" class="px-2 py-1 text-[9px] bg-red-600/10 text-red-500 border border-red-500/20 rounded">🚨</button>
                 </div>
-                <div class="mt-4 p-2 bg-black/40 border border-slate-800 rounded">
-                    <h4 class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Risk Timeline</h4>
-                    <div class="chart-container">
-                        <canvas id="riskChart"></canvas>
-                    </div>
+            </div>
+            <div class="authority-card p-3 rounded border-emerald-500">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-white font-bold">Dr. Meena Iyer</span>
+                    <span class="text-[8px] bg-emerald-950 text-emerald-400 px-1 rounded">AVAILABLE</span>
+                </div>
+                <button onclick="handleAction('Dr. Meena Iyer', 'ALERT TEAM')" class="w-full py-1 text-[9px] bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 rounded uppercase font-bold">Alert Team</button>
+            </div>
+            <div class="authority-card p-3 rounded border-red-500 bg-red-900/10">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-xs text-white font-bold">Sgt. Dev Patel</span>
+                    <span class="text-[8px] bg-red-500 text-white px-1 rounded">DEPLOYED</span>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="handleAction('Sgt. Dev Patel', 'RECALL')" class="flex-grow py-1 text-[9px] bg-slate-800 text-slate-400 border border-slate-700 rounded uppercase font-bold">Recall</button>
+                    <button onclick="handleAction('Sgt. Dev Patel', 'REDEPLOY')" class="flex-grow py-1 text-[9px] bg-red-600 text-white rounded uppercase font-bold">Redeploy</button>
                 </div>
             </div>
         </div>
+    </div>
 
-        <div class="col-span-2 flex flex-col gap-3">
-            <div class="glass-panel p-3 rounded border-l-2 border-cyan-500">
-                <h3 class="text-[10px] uppercase tracking-widest text-cyan-400 mb-2">Risk Formula</h3>
-                <p class="text-[9px] text-slate-400 leading-tight">0.5 × Density + 0.3 × Motion + 0.2 × Bottleneck</p>
-                <p id="final-risk-score" class="text-lg font-mono text-white mt-1">RISK: 0.0</p>
-            </div>
+</main>
 
-            <div class="glass-panel p-3 rounded border-l-2 border-purple-500">
-                <h3 class="text-[10px] uppercase tracking-widest text-purple-400 mb-1">AI Confidence Score</h3>
-                <div class="flex justify-between items-end">
-                    <p id="accuracy-value" class="text-2xl font-mono text-white">0.0%</p>
-                    <p id="accuracy-status" class="text-[9px] text-slate-500 mb-1 uppercase tracking-tighter">
-                        Initializing...</p>
-                </div>
-                <div class="w-full bg-slate-900 h-1.5 mt-2 rounded-full overflow-hidden">
-                    <div id="accuracy-bar" class="bg-purple-500 h-full w-0 acc-gauge"></div>
-                </div>
-            </div>
+<footer class="p-2 px-4 flex justify-between items-center glass-panel text-[10px] uppercase tracking-widest">
+    <div class="flex gap-4">
+        <span>StampedeSafe Intelligence</span>
+        <span class="text-slate-600">|</span>
+        <span>YOLOv8s + Optical Flow</span>
+        <span class="text-slate-600">|</span>
+        <button onclick="fetchModelStats()" class="hover:text-cyan-400 transition-colors">View Technical Model Specs ↗</button>
+    </div>
+    <div id="footerStatus" class="text-cyan-400">System Ready • All Nodes Online</div>
+</footer>
 
-            <h3 class="text-[10px] uppercase tracking-widest text-slate-500 pl-1">Authority Units</h3>
-            <div class="flex-grow space-y-3 overflow-y-auto pr-1">
-                <div class="authority-card p-3 rounded">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs text-white font-bold">Guard Kavya Rao</span>
-                        <span class="text-[8px] bg-slate-800 px-1 rounded">STANDBY</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="handleAction('Guard Kavya Rao', 'DISPATCH')"
-                            class="flex-grow py-1 text-[9px] bg-blue-600/20 text-blue-400 border border-blue-500/40 rounded uppercase font-bold">Dispatch</button>
-                        <button onclick="handleAction('Guard Kavya Rao', 'ALERT')"
-                            class="px-2 py-1 text-[9px] bg-red-600/10 text-red-500 border border-red-500/20 rounded">🚨</button>
-                    </div>
-                </div>
-                <div class="authority-card p-3 rounded border-emerald-500">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs text-white font-bold">Dr. Meena Iyer</span>
-                        <span class="text-[8px] bg-emerald-950 text-emerald-400 px-1 rounded">AVAILABLE</span>
-                    </div>
-                    <button onclick="handleAction('Dr. Meena Iyer', 'ALERT TEAM')"
-                        class="w-full py-1 text-[9px] bg-emerald-600/20 text-emerald-400 border border-emerald-500/40 rounded uppercase font-bold">Alert
-                        Team</button>
-                </div>
-                <div class="authority-card p-3 rounded border-red-500 bg-red-900/10">
-                    <div class="flex justify-between items-start mb-2">
-                        <span class="text-xs text-white font-bold">Sgt. Dev Patel</span>
-                        <span class="text-[8px] bg-red-500 text-white px-1 rounded">DEPLOYED</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <button onclick="handleAction('Sgt. Dev Patel', 'RECALL')"
-                            class="flex-grow py-1 text-[9px] bg-slate-800 text-slate-400 border border-slate-700 rounded uppercase font-bold">Recall</button>
-                        <button onclick="handleAction('Sgt. Dev Patel', 'REDEPLOY')"
-                            class="flex-grow py-1 text-[9px] bg-red-600 text-white rounded uppercase font-bold">Redeploy</button>
-                    </div>
-                </div>
-            </div>
-        </div>
+<script>
+    const socket = new WebSocket("ws://127.0.0.1:8000/ws");
 
-    </main>
+    const ctx = document.getElementById('riskChart').getContext('2d');
+    const riskChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: Array(20).fill(''),
+            datasets: [{
+                data: Array(20).fill(0),
+                borderColor: '#00f5d4',
+                borderWidth: 2,
+                pointRadius: 0,
+                fill: true,
+                backgroundColor: 'rgba(0, 245, 212, 0.1)',
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { display: false },
+                y: { display: true, min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { display: false } }
+            }
+        }
+    });
 
-    <footer class="p-2 px-4 flex justify-between items-center glass-panel text-[10px] uppercase tracking-widest">
-        <div class="flex gap-4">
-            <span>StampedeSafe Intelligence</span>
-            <span class="text-slate-600">|</span>
-            <span>YOLOv8s + Optical Flow</span>
-            <span class="text-slate-600">|</span>
-            <button onclick="fetchModelStats()" class="hover:text-cyan-400 transition-colors">View Technical Model Specs
-                ↗</button>
-        </div>
-        <div id="footerStatus" class="text-cyan-400">System Ready • All Nodes Online</div>
-    </footer>
+    socket.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (!data.streams) return;
 
-    <script>
-        // ── Risk chart (unchanged) ────────────────────────────────────────────
-        const ctx = document.getElementById('riskChart').getContext('2d');
-        const riskChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: Array(20).fill(''),
-                datasets: [{
-                    data: Array(20).fill(0),
-                    borderColor: '#00f5d4',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: true,
-                    backgroundColor: 'rgba(0, 245, 212, 0.1)',
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                animation: { duration: 0 },
-                plugins: { legend: { display: false } },
-                scales: {
-                    x: { display: false },
-                    y: { display: true, min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { display: false } }
+            let total = 0;
+            let highestRiskScore = 0;
+            let priorityImg = null;
+            let overallHighestRisk = "Low";
+            let avgAccuracy = 0;
+            let streamCount = 0;
+
+            Object.entries(data.streams).forEach(([id, stream]) => {
+                const imgData = "data:image/jpeg;base64," + stream.heatmap_base64;
+
+                const cam = document.getElementById(`${id}-stream`);
+                if (cam) cam.src = imgData;
+
+                const countLabel = document.getElementById(`count-${id}`);
+                if (countLabel) countLabel.innerText = stream.people_count;
+
+                if (stream.model_accuracy) {
+                    avgAccuracy += stream.model_accuracy;
+                    streamCount++;
+                }
+
+                if (stream.risk_score > highestRiskScore) {
+                    highestRiskScore = stream.risk_score;
+                    priorityImg = imgData;
+                    overallHighestRisk = stream.risk_level;
+
+                    document.getElementById('motion-percent').innerText = `${Math.round(stream.chaos_factor * 100)}%`;
+                    document.getElementById('motion-bar').style.width = `${Math.min(stream.chaos_factor * 100, 100)}%`;
+
+                    let btl = Math.min((stream.people_count / 150) * 100, 100);
+                    document.getElementById('bottleneck-percent').innerText = `${Math.round(btl)}%`;
+                    document.getElementById('bottleneck-bar').style.width = `${btl}%`;
+
+                    document.getElementById('final-risk-score').innerText = `RISK: ${stream.risk_score.toFixed(1)}`;
+                }
+
+                total += stream.people_count;
+                updateRiskUI(id, stream.risk_level);
+            });
+
+            if (streamCount > 0) {
+                let finalAcc = (avgAccuracy / streamCount).toFixed(1);
+                const accLabel  = document.getElementById('accuracy-value');
+                const accBar    = document.getElementById('accuracy-bar');
+                const accStatus = document.getElementById('accuracy-status');
+
+                accLabel.innerText = finalAcc + "%";
+                accBar.style.width = finalAcc + "%";
+
+                if (finalAcc > 70) {
+                    accStatus.innerText   = "Optimal Precision";
+                    accStatus.className   = "text-[9px] text-emerald-400 uppercase tracking-tighter";
+                } else if (finalAcc > 40) {
+                    accStatus.innerText   = "Fair Confidence";
+                    accStatus.className   = "text-[9px] text-yellow-400 uppercase tracking-tighter";
+                } else {
+                    accStatus.innerText   = "Low Confidence / Occlusion";
+                    accStatus.className   = "text-[9px] text-red-400 uppercase tracking-tighter";
                 }
             }
-        });
 
-        // ── WebSocket with exponential-backoff reconnect ──────────────────────
-        // ONLY THIS SECTION IS NEW vs your original. Everything inside
-        // onmessage / onopen / the helper functions is 100% unchanged.
+            if (priorityImg) document.getElementById('heatmap-feed').src = priorityImg;
 
-        let wsAttempt = 0;
-        let rcTimer = null;
+            document.getElementById('total-count').innerText = total.toString().padStart(3, '0');
+            updateSystemStatus(overallHighestRisk);
 
-        function showReconnect(delayMs) {
-            document.getElementById('reconnect-overlay').classList.add('show');
-            let secs = Math.ceil(delayMs / 1000);
-            const cd = document.getElementById('rc-countdown');
-            cd.innerText = `Retrying in ${secs}s…`;
-            clearInterval(rcTimer);
-            rcTimer = setInterval(() => {
-                secs--;
-                if (secs <= 0) { clearInterval(rcTimer); cd.innerText = 'Connecting…'; }
-                else cd.innerText = `Retrying in ${secs}s…`;
-            }, 1000);
+            riskChart.data.datasets[0].data.push(highestRiskScore);
+            riskChart.data.datasets[0].data.shift();
+            riskChart.update('none');
+
+        } catch (e) { console.error("UI Error:", e); }
+    };
+
+    async function fetchModelStats() {
+        try {
+            const res = await fetch('http://127.0.0.1:8000/model-stats');
+            const stats = await res.json();
+            alert(`Technical Specs:\n\nModel: ${stats.model_name}\nmAP: ${stats.mAP_50}\nResolution: ${stats.input_resolution}\nHardware: ${stats.inference_speed}`);
+        } catch (e) {
+            console.error("Stats Fetch Error", e);
         }
+    }
 
-        function hideReconnect() {
-            document.getElementById('reconnect-overlay').classList.remove('show');
-            clearInterval(rcTimer);
+    function updateRiskUI(id, level) {
+        const status = document.getElementById(`status-${id}`);
+        const bar    = document.getElementById(`bar-${id}`);
+        if (!status || !bar) return;
+
+        if (level === "High") {
+            status.innerText = "CRITICAL";
+            status.className = "text-red-500 font-bold status-pulse";
+            bar.style.width  = "100%";
+            bar.className    = "h-full bg-red-500 transition-all duration-500";
+        } else if (level === "Medium") {
+            status.innerText = "MED RISK";
+            status.className = "text-yellow-500 font-bold";
+            bar.style.width  = "50%";
+            bar.className    = "h-full bg-yellow-500 transition-all duration-500";
+        } else {
+            status.innerText = "LOW RISK";
+            status.className = "text-emerald-500 font-bold";
+            bar.style.width  = "25%";
+            bar.className    = "h-full bg-emerald-500 transition-all duration-500";
         }
+    }
 
-        function connectWS() {
-            const socket = new WebSocket("ws://43.205.241.149:8000/ws");
+    function updateSystemStatus(highestRisk) {
+        const sysStatus = document.getElementById('system-status');
+        if (!sysStatus) return;
 
-            // ── onmessage: identical to your original ─────────────────────────
-            socket.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (!data.streams) return;
-
-                    let total = 0;
-                    let highestRiskScore = 0;
-                    let priorityImg = null;
-                    let overallHighestRisk = "Low";
-                    let avgAccuracy = 0;
-                    let streamCount = 0;
-
-                    Object.entries(data.streams).forEach(([id, stream]) => {
-                        const imgData = "data:image/jpeg;base64," + stream.heatmap_base64;
-
-                        const cam = document.getElementById(`${id}-stream`);
-                        if (cam) cam.src = imgData;
-
-                        const countLabel = document.getElementById(`count-${id}`);
-                        if (countLabel) countLabel.innerText = stream.people_count;
-
-                        if (stream.model_accuracy) {
-                            avgAccuracy += stream.model_accuracy;
-                            streamCount++;
-                        }
-
-                        if (stream.risk_score > highestRiskScore) {
-                            highestRiskScore = stream.risk_score;
-                            priorityImg = imgData;
-                            overallHighestRisk = stream.risk_level;
-
-                            const motionPercentEl = document.getElementById('motion-percent');
-                            if (motionPercentEl) motionPercentEl.innerText = `${Math.round(stream.chaos_factor * 100)}%`;
-
-                            const motionBarEl = document.getElementById('motion-bar');
-                            if (motionBarEl) motionBarEl.style.width = `${Math.min(stream.chaos_factor * 100, 100)}%`;
-
-                            let btl = Math.min((stream.people_count / 150) * 100, 100);
-                            const btlPercentEl = document.getElementById('bottleneck-percent');
-                            if (btlPercentEl) btlPercentEl.innerText = `${Math.round(btl)}%`;
-
-                            const btlBarEl = document.getElementById('bottleneck-bar');
-                            if (btlBarEl) btlBarEl.style.width = `${btl}%`;
-
-                            const finalRiskEl = document.getElementById('final-risk-score');
-                            if (finalRiskEl) finalRiskEl.innerText = `RISK: ${stream.risk_score.toFixed(1)}`;
-                        }
-
-                        total += stream.people_count;
-                        updateRiskUI(id, stream.risk_level);
-                    });
-
-                    if (streamCount > 0) {
-                        let finalAcc = (avgAccuracy / streamCount).toFixed(1);
-                        const accLabel = document.getElementById('accuracy-value');
-                        const accBar = document.getElementById('accuracy-bar');
-                        const accStatus = document.getElementById('accuracy-status');
-
-                        if (accLabel) accLabel.innerText = finalAcc + "%";
-                        if (accBar) accBar.style.width = finalAcc + "%";
-
-                        if (accStatus) {
-                            if (finalAcc > 70) {
-                                accStatus.innerText = "Optimal Precision";
-                                accStatus.className = "text-[9px] text-emerald-400 uppercase tracking-tighter";
-                            } else if (finalAcc > 40) {
-                                accStatus.innerText = "Fair Confidence";
-                                accStatus.className = "text-[9px] text-yellow-400 uppercase tracking-tighter";
-                            } else {
-                                accStatus.innerText = "Low Confidence / Occlusion";
-                                accStatus.className = "text-[9px] text-red-400 uppercase tracking-tighter";
-                            }
-                        }
-                    }
-
-                    const heatmapFeedEl = document.getElementById('heatmap-feed');
-                    if (priorityImg && heatmapFeedEl) heatmapFeedEl.src = priorityImg;
-
-                    const totalCountEl = document.getElementById('total-count');
-                    if (totalCountEl) totalCountEl.innerText = total.toString().padStart(3, '0');
-
-                    updateSystemStatus(overallHighestRisk);
-
-                    riskChart.data.datasets[0].data.push(highestRiskScore);
-                    riskChart.data.datasets[0].data.shift();
-                    riskChart.update('none');
-
-                } catch (e) {
-                    console.error("UI Error:", e);
-                }
-            };
-
-            // ── onopen: identical to your original ────────────────────────────
-            socket.onopen = () => {
-                wsAttempt = 0;
-                hideReconnect();
-                const pill = document.getElementById('connPill');
-                if (pill) {
-                    pill.innerText = "SYSTEM LIVE";
-                    pill.className = "px-3 py-1 rounded-full bg-emerald-950/50 text-emerald-500 text-[10px] font-bold border border-emerald-900/50";
-                }
-            };
-
-            // ── onclose: was location.reload() — now exponential backoff ──────
-            socket.onclose = () => {
-                const pill = document.getElementById('connPill');
-                if (pill) {
-                    pill.innerText = "DISCONNECTED";
-                    pill.className = "px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50";
-                }
-                // 1s → 2s → 4s → 8s → 16s → 30s max  (instead of crashing reload)
-                const delay = Math.min(1000 * Math.pow(2, wsAttempt), 30000);
-                wsAttempt++;
-                console.warn(`WS closed. Retry #${wsAttempt} in ${delay}ms`);
-                showReconnect(delay);
-                setTimeout(connectWS, delay);
-            };
-
-            socket.onerror = () => console.error("WS error");
+        if (highestRisk === "High") {
+            sysStatus.innerText = "CRITICAL";
+            sysStatus.className = "text-xl font-bold text-red-500 status-pulse";
+        } else if (highestRisk === "Medium") {
+            sysStatus.innerText = "WARNING";
+            sysStatus.className = "text-xl font-bold text-yellow-500";
+        } else {
+            sysStatus.innerText = "STABLE";
+            sysStatus.className = "text-xl font-bold text-emerald-500";
         }
+    }
 
-        connectWS();   // ← replaces: const socket = new WebSocket(...)
+    socket.onopen = () => {
+        document.getElementById('connPill').innerText   = "SYSTEM LIVE";
+        document.getElementById('connPill').className   = "px-3 py-1 rounded-full bg-emerald-950/50 text-emerald-500 text-[10px] font-bold border border-emerald-900/50";
+    };
 
-        // ── GLOBAL FUNCTIONS: all identical to your original ──────────────────
+    socket.onclose = () => {
+        document.getElementById('connPill').innerText   = "DISCONNECTED";
+        document.getElementById('connPill').className   = "px-3 py-1 rounded-full bg-red-950/50 text-red-500 text-[10px] font-bold border border-red-900/50";
+        setTimeout(() => location.reload(), 3000);
+    };
 
-        async function fetchModelStats() {
+    async function uploadToLiveCam(camId) {
+        const input = document.createElement('input');
+        input.type  = 'file';
+        input.onchange = async (e) => {
+            const formData = new FormData();
+            formData.append('file', e.target.files[0]);
+            document.getElementById('footerStatus').textContent = `UPLOADING TO ${camId}...`;
             try {
-                const res = await fetch('http://43.205.241.149:8000/model-stats');
-                const stats = await res.json();
-                alert(`Technical Specs:\n\nModel: ${stats.model_name}\nmAP: ${stats.mAP_50}\nResolution: ${stats.input_resolution}\nHardware: ${stats.inference_speed}`);
-            } catch (e) {
-                console.error("Stats Fetch Error", e);
+                const res = await fetch(`http://127.0.0.1:8000/upload-to-cam/${camId}`, { method: 'POST', body: formData });
+                if (res.ok) document.getElementById('footerStatus').textContent = `${camId} SYNCED`;
+            } catch (err) {
+                document.getElementById('footerStatus').textContent = "UPLOAD FAILED";
             }
-        }
+        };
+        input.click();
+    }
 
-        function updateRiskUI(id, level) {
-            const status = document.getElementById(`status-${id}`);
-            const bar = document.getElementById(`bar-${id}`);
-            if (!status || !bar) return;
+    setInterval(() => {
+        document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-GB', { hour12: false });
+    }, 1000);
 
-            if (level === "High") {
-                status.innerText = "CRITICAL";
-                status.className = "text-red-500 font-bold status-pulse";
-                bar.style.width = "100%";
-                bar.className = "h-full bg-red-500 transition-all duration-500";
-            } else if (level === "Medium") {
-                status.innerText = "MED RISK";
-                status.className = "text-yellow-500 font-bold";
-                bar.style.width = "50%";
-                bar.className = "h-full bg-yellow-500 transition-all duration-500";
-            } else {
-                status.innerText = "LOW RISK";
-                status.className = "text-emerald-500 font-bold";
-                bar.style.width = "25%";
-                bar.className = "h-full bg-emerald-500 transition-all duration-500";
-            }
-        }
+    async function handleAction(unitName, action) {
+        alert(`Command Sent: [${action}] to ${unitName}`);
 
-        function updateSystemStatus(highestRisk) {
-            const sysStatus = document.getElementById('system-status');
-            if (!sysStatus) return;
+        /*
+        fetch('http://127.0.0.1:8000/api/dispatch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ unit: unitName, action: action })
+        });
+        */
 
-            if (highestRisk === "High") {
-                sysStatus.innerText = "CRITICAL";
-                sysStatus.className = "text-xl font-bold text-red-500 status-pulse";
-            } else if (highestRisk === "Medium") {
-                sysStatus.innerText = "WARNING";
-                sysStatus.className = "text-xl font-bold text-yellow-500";
-            } else {
-                sysStatus.innerText = "STABLE";
-                sysStatus.className = "text-xl font-bold text-emerald-500";
-            }
-        }
-
-        async function uploadToLiveCam(camId) {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.onchange = async (e) => {
-                const formData = new FormData();
-                formData.append('file', e.target.files[0]);
-                document.getElementById('footerStatus').textContent = `UPLOADING TO ${camId}...`;
-                try {
-                    const res = await fetch(`http://43.205.241.149:8000/upload-to-cam/${camId}`, { method: 'POST', body: formData });
-                    if (res.ok) document.getElementById('footerStatus').textContent = `${camId} SYNCED`;
-                } catch (err) {
-                    document.getElementById('footerStatus').textContent = "UPLOAD FAILED";
-                }
-            };
-            input.click();
-        }
-
-        async function handleAction(unitName, action) {
-            alert(`Command Sent: [${action}] to ${unitName}`);
-            console.log(`Action Logged: ${action} for ${unitName} at ${new Date().toLocaleTimeString()}`);
-        }
-
-        // ── INTERVALS: identical to your original ─────────────────────────────
-        setInterval(() => {
-            const now = new Date();
-            const clockEl = document.getElementById('clock');
-            const dateEl = document.getElementById('clockDate');
-            if (clockEl) {
-                clockEl.innerText = now.toLocaleTimeString('en-GB', { hour12: false });
-            }
-            if (dateEl) {
-                dateEl.innerText = now.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
-            }
-        }, 1000);
-    </script>
+        console.log(`Action Logged: ${action} for ${unitName} at ${new Date().toLocaleTimeString()}`);
+    }
+</script>
 </body>
-
 </html>
